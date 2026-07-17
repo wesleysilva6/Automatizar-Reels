@@ -44,9 +44,42 @@ if ($ArquivoLocal) {
     Write-Host '[1/3] Baixando video do TikTok...' -ForegroundColor Green
     New-Item -ItemType Directory -Force $DownDir | Out-Null
     Get-ChildItem $DownDir -File -ErrorAction SilentlyContinue | Remove-Item -Force
-    & $YtDlp -f 'mp4/best' --no-playlist -o (Join-Path $DownDir 'video.%(ext)s') -- $Link
-    if ($LASTEXITCODE -ne 0) { throw 'Falha ao baixar o video. Confira o link e a internet.' }
-    $videoFile = (Get-ChildItem $DownDir -File | Select-Object -First 1).FullName
+    $videoFile = $null
+
+    # 1a opcao: HD (1080p, com audio, sem marca d'agua) via api.tikwm.com --
+    # a mesma API usada por sites como ssstik.io.
+    $ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+    try {
+        Write-Host '   Tentando download em HD...'
+        $api  = 'https://www.tikwm.com/api/?hd=1&url=' + [uri]::EscapeDataString($Link)
+        $resp = Invoke-RestMethod -Uri $api -UserAgent $ua -TimeoutSec 30
+        if ($resp.code -ne 0 -or -not $resp.data.hdplay) { throw "resposta da API: $($resp.msg)" }
+        $destinoHd = Join-Path $DownDir 'video.mp4'
+        Invoke-WebRequest -Uri $resp.data.hdplay -OutFile $destinoHd -UserAgent $ua -TimeoutSec 300
+        $videoFile = $destinoHd
+        Write-Host '   Download HD concluido.' -ForegroundColor Green
+    } catch {
+        Write-Host "   HD indisponivel agora ($($_.Exception.Message)). Usando metodo alternativo..." -ForegroundColor Yellow
+    }
+
+    # 2a opcao: yt-dlp preferindo h264 -- os formatos h265 (bytevc1) do
+    # TikTok chegam sem audio, apesar de a lista de formatos indicar que tem.
+    if (-not $videoFile) {
+        $tentativa = 0
+        do {
+            $tentativa++
+            if ($tentativa -gt 1) {
+                Write-Host "   O TikTok recusou, tentando de novo ($tentativa de 3)..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 8
+            }
+            & $YtDlp -f 'b[vcodec^=h264]/mp4/best' --no-playlist -o (Join-Path $DownDir 'video.%(ext)s') -- $Link
+        } while ($LASTEXITCODE -ne 0 -and $tentativa -lt 3)
+        if ($LASTEXITCODE -ne 0) { throw 'Falha ao baixar o video. Confira o link e a internet.' }
+        $videoFile = (Get-ChildItem $DownDir -File | Select-Object -First 1).FullName
+    }
+
+    $temAudio = & $Ffprobe -v error -select_streams a -show_entries stream=codec_type -of csv=p=0 -- $videoFile
+    if (-not $temAudio) { throw 'O video baixado veio SEM AUDIO (falha do TikTok). Tente de novo em alguns minutos.' }
 }
 
 # ---------- 2. Calcular as partes ----------
