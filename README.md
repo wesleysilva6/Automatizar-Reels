@@ -27,7 +27,9 @@ Existem **duas formas de usar**:
    - Ajuste no controle deslizante a **duração de cada parte** (10s a 120s; padrão 59s, o limite dos stories)
    - Clique no botão da parte desejada (**Parte 1**, **Parte 2**...) — cada botão mostra o trecho exato do vídeo
    - A parte é cortada na hora no servidor e baixa pronta (ex.: `Parte 03 de 04.mp4`)
-   - ⏳ Cada parte leva de 45s a 1min30 para gerar — o botão mostra "Gerando..."
+   - ⏳ Uma **barra de progresso real** mostra o download e o corte enquanto a parte é gerada (leva de 45s a 1min30)
+   - Botão **"Baixar todas as partes"**: gera e baixa todas de uma vez, uma após a outra
+   - Campos de **numeração** (`começar na parte` / `de N no total`): se o vídeo for a **continuação** de outro, ajuste para a contagem seguir certa entre os vídeos. Ex.: o vídeo 1 tem 4 partes (1 a 4 de 9); no vídeo 2, coloque "começar na parte 5" e as partes saem como `Parte 05 de 09.mp4`, `Parte 06 de 09.mp4`... (o total se ajusta sozinho, mas dá para forçar)
 
 ### Como funciona por dentro
 
@@ -37,7 +39,7 @@ O site é um app **Next.js 16 + TypeScript** (pasta [web/](web/)) com três rota
 |---|---|
 | `/api/video` | Busca a prévia: consulta a API pública **tikwm.com** (a mesma que sites como o ssstik.io usam), que resolve o link do TikTok e devolve título, capa, duração e as URLs diretas do CDN |
 | `/api/download` | Baixa o arquivo: recebe o link do TikTok, resolve a URL do CDN (HD `hdplay`, SD `play` ou música) e repassa o arquivo em streaming para o navegador com nome amigável |
-| `/api/parte` | Corta no servidor: baixa o vídeo HD para o `/tmp` da função (reaproveitado entre chamadas), roda o **ffmpeg** (`ffmpeg-static`) reencodando em H.264 CRF 21 + AAC 128k para o corte cair **exatamente** no segundo pedido, e devolve a parte pronta |
+| `/api/parte` | Corta no servidor: baixa o vídeo HD para o `/tmp` da função (reaproveitado entre chamadas), roda o **ffmpeg** (`ffmpeg-static`) reencodando em H.264 CRF 21 + AAC 128k para o corte cair **exatamente** no segundo pedido, e devolve a parte pronta. Com `?stream=1` responde em **SSE**, relatando o progresso real (download e corte) e entregando o arquivo no evento final; aceita `pnum`/`ptot` para o nome refletir a numeração escolhida |
 
 Por segurança, as APIs só aceitam links do domínio `tiktok.com` (não fazem proxy de URL qualquer).
 

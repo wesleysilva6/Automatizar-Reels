@@ -257,6 +257,92 @@ body {
   border-top-color: #7c3aed;
 }
 
+.numeracao {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 0.9rem;
+  color: #4c1d95;
+}
+
+.numeracao-titulo {
+  font-weight: 700;
+}
+
+.numeracao label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.numeracao input[type='number'] {
+  width: 62px;
+  padding: 6px 8px;
+  border: 2px solid #ddd6fe;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  text-align: center;
+  outline: none;
+}
+
+.numeracao input[type='number']:focus {
+  border-color: #7c3aed;
+}
+
+.dica-numeracao {
+  font-size: 0.85rem;
+  color: #6b7280;
+  background: #f5f3ff;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.dica-numeracao strong {
+  color: #7c3aed;
+}
+
+.botao-todas {
+  background: #7c3aed;
+  color: #fff;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.botao-todas:hover {
+  filter: brightness(1.08);
+}
+
+.progresso {
+  margin-top: 4px;
+}
+
+.rotulo-prog {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #6d28d9;
+  margin-bottom: 6px;
+}
+
+.barra-prog {
+  height: 10px;
+  background: #ede9fe;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.barra-prog > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #7c3aed, #ec4899);
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
 .rodape {
   color: rgba(255, 255, 255, 0.75);
   font-size: 0.85rem;

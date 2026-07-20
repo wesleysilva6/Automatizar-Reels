@@ -46,5 +46,7 @@ powershell -ExecutionPolicy Bypass -File .\novawave.ps1 -ArquivoLocal "C:\caminh
 - Título centralizado no topo (fora da área coberta pela interface do Instagram)
 - "Parte X de Y" aparece só quando o vídeo gera mais de uma parte
 - Qualidade: H.264 CRF 21 + AAC 128k (ótima para o Instagram)
-- Para atualizar o baixador quando o TikTok mudar algo: baixe o novo `yt-dlp.exe`
-  em https://github.com/yt-dlp/yt-dlp/releases e substitua o de `tools\`
+- Se o TikTok mudar algo e os downloads começarem a falhar, clique em
+  **"Atualizar baixador"** na janela do programa (ele roda o `yt-dlp -U` sozinho).
+  Alternativa manual: baixe o novo `yt-dlp.exe` em
+  https://github.com/yt-dlp/yt-dlp/releases e substitua o de `tools\`

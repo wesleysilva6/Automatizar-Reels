@@ -8,6 +8,7 @@ Add-Type -AssemblyName System.Drawing
 
 $Root   = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Engine = Join-Path $Root 'novawave.ps1'
+$YtDlp  = Join-Path $Root 'tools\yt-dlp.exe'
 $ProntosDir = Join-Path $Root 'Prontos'
 $UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
 
@@ -165,17 +166,29 @@ $txtLog.Font = New-Object System.Drawing.Font('Consolas', 9)
 
 $lblStatus = New-Object System.Windows.Forms.Label
 $lblStatus.Text = 'Pronto para começar.'
-$lblStatus.Location = New-Object System.Drawing.Point(24, 646)
-$lblStatus.Size = New-Object System.Drawing.Size(572, 26)
+$lblStatus.Location = New-Object System.Drawing.Point(24, 648)
+$lblStatus.Size = New-Object System.Drawing.Size(380, 26)
 $lblStatus.ForeColor = $CorCinza
 
+# ---- Botao "Atualizar baixador" (roda yt-dlp -U quando o TikTok muda algo) ----
+$btnAtualizar = New-Object System.Windows.Forms.Button
+$btnAtualizar.Text = 'Atualizar baixador'
+$btnAtualizar.Location = New-Object System.Drawing.Point(430, 643)
+$btnAtualizar.Size = New-Object System.Drawing.Size(166, 30)
+$btnAtualizar.FlatStyle = 'Flat'
+$btnAtualizar.ForeColor = $CorRoxo
+$btnAtualizar.FlatAppearance.BorderColor = $CorRoxo
+$btnAtualizar.Font = New-Object System.Drawing.Font('Segoe UI', 9)
+
 $form.Controls.AddRange(@($panelHeader, $lblLink, $txtLink, $btnColar, $panelPrev,
-                          $lblTitulo, $txtTitulo, $btnGerar, $btnPasta, $barra, $txtLog, $lblStatus))
+                          $lblTitulo, $txtTitulo, $btnGerar, $btnPasta, $barra, $txtLog,
+                          $lblStatus, $btnAtualizar))
 
 $script:proc    = $null
 $script:logFile = $null
 $script:errFile = $null
 $script:logPos  = 0
+$script:modo    = 'gerar'   # 'gerar' ou 'atualizar'
 
 $timer = New-Object System.Windows.Forms.Timer
 $timer.Interval = 400
@@ -256,11 +269,12 @@ function Read-NovoLog {
 }
 
 function Set-Ocupado([bool]$ocupado) {
-    $btnGerar.Enabled  = -not $ocupado
-    $btnColar.Enabled  = -not $ocupado
-    $txtLink.Enabled   = -not $ocupado
-    $txtTitulo.Enabled = -not $ocupado
-    $barra.Visible     = $ocupado
+    $btnGerar.Enabled     = -not $ocupado
+    $btnColar.Enabled     = -not $ocupado
+    $btnAtualizar.Enabled = -not $ocupado
+    $txtLink.Enabled      = -not $ocupado
+    $txtTitulo.Enabled    = -not $ocupado
+    $barra.Visible        = $ocupado
 }
 
 $timer.Add_Tick({
@@ -271,18 +285,26 @@ $timer.Add_Tick({
         Read-NovoLog
         $codigo = $script:proc.ExitCode
         if ($codigo -eq 0) {
-            $lblStatus.Text = 'PRONTO! Os vídeos estão na pasta Prontos.'
+            if ($script:modo -eq 'atualizar') {
+                $lblStatus.Text = 'Baixador atualizado! Já pode gerar seus vídeos.'
+            } else {
+                $lblStatus.Text = 'PRONTO! Os vídeos estão na pasta Prontos.'
+                $txtLink.Clear()
+                $txtTitulo.Clear()
+                Reset-Previa
+            }
             $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(0, 140, 60)
-            $txtLink.Clear()
-            $txtTitulo.Clear()
-            Reset-Previa
         } else {
             $erro = ''
             if ($script:errFile -and (Test-Path $script:errFile)) {
                 $erro = [System.IO.File]::ReadAllText($script:errFile, [System.Text.Encoding]::UTF8)
             }
             if ($erro.Trim()) { $txtLog.AppendText("`r`nERRO:`r`n" + $erro.Trim() + "`r`n") }
-            $lblStatus.Text = 'Deu erro. Veja a mensagem acima e tente de novo.'
+            if ($script:modo -eq 'atualizar') {
+                $lblStatus.Text = 'Não deu para atualizar o baixador. Veja a mensagem acima.'
+            } else {
+                $lblStatus.Text = 'Deu erro. Veja a mensagem acima e tente de novo.'
+            }
             $lblStatus.ForeColor = [System.Drawing.Color]::FromArgb(190, 30, 30)
         }
         $script:proc = $null
@@ -323,6 +345,7 @@ $btnGerar.Add_Click({
     $txtLog.Clear()
     $lblStatus.Text = 'Trabalhando... isso pode levar alguns minutos.'
     $lblStatus.ForeColor = $CorCinza
+    $script:modo = 'gerar'
     Set-Ocupado $true
 
     $script:logFile = [System.IO.Path]::GetTempFileName()
@@ -335,6 +358,30 @@ $btnGerar.Add_Click({
         -RedirectStandardOutput $script:logFile -RedirectStandardError $script:errFile `
         -WindowStyle Hidden -PassThru
     $null = $script:proc.Handle   # garante que o ExitCode fique disponivel depois
+    $timer.Start()
+})
+
+$btnAtualizar.Add_Click({
+    if (-not (Test-Path $YtDlp)) {
+        [System.Windows.Forms.MessageBox]::Show(
+            "Não encontrei o baixador em:`n$YtDlp", 'NovaWave', 'OK', 'Warning') | Out-Null
+        return
+    }
+    $txtLog.Clear()
+    $txtLog.AppendText("Procurando atualização do baixador (yt-dlp)...`r`n")
+    $lblStatus.Text = 'Atualizando o baixador...'
+    $lblStatus.ForeColor = $CorCinza
+    $script:modo = 'atualizar'
+    Set-Ocupado $true
+
+    $script:logFile = [System.IO.Path]::GetTempFileName()
+    $script:errFile = [System.IO.Path]::GetTempFileName()
+    $script:logPos  = 0
+
+    $script:proc = Start-Process -FilePath $YtDlp -ArgumentList '-U' `
+        -RedirectStandardOutput $script:logFile -RedirectStandardError $script:errFile `
+        -WindowStyle Hidden -PassThru
+    $null = $script:proc.Handle
     $timer.Start()
 })
 
