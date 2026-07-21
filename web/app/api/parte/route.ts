@@ -177,6 +177,22 @@ async function preparar(req: NextRequest): Promise<Preparado | { resposta: NextR
   }
   if (temPreset && Number.isFinite(fps) && fps > 0) filtros.push(`fps=${fps}`);
 
+  // Título gravado no topo do vídeo (opcional). Vem depois da escala, então é
+  // desenhado sobre o quadro final. "expansion=none" deixa o texto literal; só
+  // troco a aspa simples por ’ para não quebrar o parser do filtro do ffmpeg.
+  const legenda = (req.nextUrl.searchParams.get('legenda') ?? '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim()
+    .slice(0, 70);
+  if (legenda) {
+    const fonte = join(process.cwd(), 'assets', 'fonts', 'Anton-Regular.ttf').replace(/\\/g, '/');
+    const texto = legenda.replace(/'/g, '’');
+    filtros.push(
+      `drawtext=fontfile='${fonte}':expansion=none:text='${texto}':` +
+        'fontcolor=white:fontsize=72:borderw=7:bordercolor=black:x=(w-text_w)/2:y=(h*0.08)',
+    );
+  }
+
   // Reencoda (como o NovaWave desktop) para o corte cair exatamente no segundo
   // pedido — com "-c copy" cairia no keyframe mais próximo.
   const ffArgs = [

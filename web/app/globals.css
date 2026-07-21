@@ -1369,6 +1369,35 @@ img {
   border-top-color: var(--acento);
 }
 
+.campo-titulo {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-top: 6px;
+}
+
+.campo-titulo > span {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--texto);
+}
+
+.campo-titulo input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--borda-forte);
+  border-radius: var(--raio-sm);
+  background: var(--bg-2);
+  color: var(--texto);
+  font-size: 0.95rem;
+  outline: none;
+  transition: border-color var(--trans);
+}
+
+.campo-titulo input:focus {
+  border-color: var(--acento);
+}
+
 .numeracao {
   display: flex;
   align-items: center;

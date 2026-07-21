@@ -69,6 +69,8 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
   // Numeração: permite continuar a contagem quando um vídeo é sequência de outro.
   const [inicioParte, setInicioParte] = useState(1);
   const [totalManual, setTotalManual] = useState('');
+  // Título gravado no topo do vídeo (opcional): vira "{TÍTULO} — PARTE N" por parte.
+  const [tituloVideo, setTituloVideo] = useState('');
   // Permite cancelar a geração de parte(s) em andamento (aborta o fetch, e o
   // servidor mata o download/ffmpeg ao ver a conexão cair).
   const abortRef = useRef<AbortController | null>(null);
@@ -175,6 +177,10 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
       ptot: String(totalExibido),
       url: linkBuscado,
     });
+    // Grava o título no topo do vídeo, com o número desta parte.
+    if (tituloVideo.trim()) {
+      params.set('legenda', `${tituloVideo.trim().toUpperCase()} — PARTE ${numero}`);
+    }
     const { blob } = await executarParteSSE(
       params,
       (p) => onProgresso({ parte: localN, pct: p.pct, rotulo: p.rotulo }),
@@ -332,6 +338,25 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
               />
               <span className="valor-segundos">{segundos}s</span>
             </div>
+
+            <label className="campo-titulo">
+              <span>Título no vídeo (opcional)</span>
+              <input
+                type="text"
+                placeholder="Ex.: Renasci no Apocalipse"
+                value={tituloVideo}
+                maxLength={60}
+                onChange={(e) => setTituloVideo(e.target.value)}
+                disabled={ocupado}
+              />
+            </label>
+            {tituloVideo.trim() && (
+              <span className="dica-numeracao">
+                Cada parte sai com{' '}
+                <strong>{tituloVideo.trim().toUpperCase()} — PARTE {inicioParte}</strong> gravado no
+                topo (o número acompanha cada parte).
+              </span>
+            )}
 
             <div className="numeracao">
               <span className="numeracao-titulo">Numeração das partes:</span>
