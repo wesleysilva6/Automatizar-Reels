@@ -32,7 +32,7 @@ export default function PaginaProjeto({ params }: { params: Promise<{ id: string
           <span className="vazio-icone">🔍</span>
           <h2>Projeto não encontrado</h2>
           <p>Ele pode ter sido excluído.</p>
-          <Link href="/" className="botao botao-baixar">
+          <Link href="/projetos" className="botao botao-baixar">
             Voltar aos projetos
           </Link>
         </div>
@@ -42,7 +42,7 @@ export default function PaginaProjeto({ params }: { params: Promise<{ id: string
 
   return (
     <div className="pagina-conteudo">
-      <Link href="/" className="voltar">
+      <Link href="/projetos" className="voltar">
         ← Projetos
       </Link>
 

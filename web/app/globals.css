@@ -22,6 +22,33 @@
   --sombra: 0 10px 34px rgba(0, 0, 0, 0.4);
   --sombra-sm: 0 4px 14px rgba(0, 0, 0, 0.3);
   --trans: 0.18s ease;
+  /* Cores de texto sensíveis ao tema (bom contraste no claro e no escuro). */
+  --acento-txt: #c4b5fd;
+  --perigo-txt: #fecdd3;
+  --link-ativo-txt: #ffffff;
+  --realce-txt: #ffffff;
+  --grad-topo: #1a1030;
+}
+
+/* Tema claro: só sobrescreve as variáveis — o resto do CSS se adapta sozinho. */
+:root[data-tema='claro'] {
+  --bg: #f5f5f8;
+  --bg-2: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f2f2f6;
+  --surface-3: #e8e8ee;
+  --borda: #e4e4ea;
+  --borda-forte: #d2d2db;
+  --texto: #1b1b23;
+  --texto-2: #55555f;
+  --texto-3: #86868f;
+  --sombra: 0 10px 30px rgba(20, 10, 40, 0.1);
+  --sombra-sm: 0 4px 12px rgba(20, 10, 40, 0.07);
+  --acento-txt: #6d28d9;
+  --perigo-txt: #be123c;
+  --link-ativo-txt: #6d28d9;
+  --realce-txt: #1b1b23;
+  --grad-topo: #ede9ff;
 }
 
 * {
@@ -37,8 +64,9 @@ body {
 
 body {
   font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: radial-gradient(1200px 600px at 20% -10%, #1a1030 0%, transparent 60%), var(--bg);
+  background: radial-gradient(1200px 600px at 20% -10%, var(--grad-topo) 0%, transparent 60%), var(--bg);
   color: var(--texto);
+  transition: background 0.2s ease, color 0.2s ease;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -153,7 +181,7 @@ img {
 
 .sidebar-link.ativo {
   background: color-mix(in srgb, var(--acento) 22%, transparent);
-  color: #fff;
+  color: var(--link-ativo-txt);
 }
 
 .sidebar-icone {
@@ -171,6 +199,27 @@ img {
 .sidebar-link.secundario {
   color: var(--texto-3);
   font-weight: 500;
+}
+
+.tema-toggle {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--raio-sm);
+  color: var(--texto-2);
+  font-size: 0.94rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--trans), color var(--trans);
+}
+
+.tema-toggle:hover {
+  background: var(--surface);
+  color: var(--texto);
 }
 
 /* ---------- Conteúdo genérico ---------- */
@@ -280,7 +329,7 @@ img {
 
 .botao-perigo {
   background: color-mix(in srgb, var(--perigo) 16%, transparent);
-  color: #fda4af;
+  color: var(--perigo-txt);
   border: 1px solid color-mix(in srgb, var(--perigo) 40%, transparent);
 }
 
@@ -456,7 +505,7 @@ img {
 }
 
 .proj-nome:hover {
-  color: #fff;
+  color: var(--realce-txt);
 }
 
 .proj-desc {
@@ -598,7 +647,7 @@ img {
 
 .toggle-modo button.ativo {
   background: var(--surface-3);
-  color: #fff;
+  color: var(--realce-txt);
 }
 
 .barra-selecao {
@@ -791,7 +840,7 @@ img {
 }
 
 .icone-btn.perigo:hover {
-  color: #fda4af;
+  color: var(--perigo-txt);
 }
 
 /* ---------- Overlays / modais ---------- */
@@ -917,7 +966,7 @@ img {
 }
 
 .opcao-cor.ativa {
-  border-color: #fff;
+  border-color: var(--texto);
   box-shadow: 0 0 0 2px var(--bg);
 }
 
@@ -1177,7 +1226,7 @@ img {
   width: 100%;
   background: color-mix(in srgb, var(--perigo) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--perigo) 40%, transparent);
-  color: #fecdd3;
+  color: var(--perigo-txt);
   border-radius: var(--raio-sm);
   padding: 14px 16px;
   font-size: 0.95rem;
@@ -1228,7 +1277,7 @@ img {
 .partes {
   font-size: 0.88rem;
   font-weight: 700;
-  color: #c4b5fd;
+  color: var(--acento-txt);
 }
 
 .acoes {
@@ -1286,7 +1335,7 @@ img {
 
 .valor-segundos {
   font-weight: 800;
-  color: #c4b5fd;
+  color: var(--acento-txt);
   min-width: 42px;
   text-align: right;
 }
@@ -1366,12 +1415,12 @@ img {
 }
 
 .dica-numeracao strong {
-  color: #c4b5fd;
+  color: var(--acento-txt);
 }
 
 .botao-todas {
   background: var(--surface-3);
-  color: #fff;
+  color: var(--realce-txt);
   border: 1px solid var(--borda-forte);
   justify-content: center;
   margin-top: 4px;
@@ -1390,7 +1439,7 @@ img {
   width: 100%;
   justify-content: center;
   background: color-mix(in srgb, var(--perigo) 16%, transparent);
-  color: #fda4af;
+  color: var(--perigo-txt);
   border: 1px solid color-mix(in srgb, var(--perigo) 40%, transparent);
 }
 
@@ -1403,7 +1452,7 @@ img {
   justify-content: space-between;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #c4b5fd;
+  color: var(--acento-txt);
   margin-bottom: 6px;
 }
 
@@ -1488,6 +1537,28 @@ img {
   }
 }
 
+@media (max-width: 720px) {
+  .grade-videos.grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+
+  .grade-projetos {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  }
+
+  .barra-videos {
+    flex-wrap: wrap;
+  }
+
+  .busca-videos {
+    flex: 1 1 100%;
+  }
+
+  .overlay {
+    padding: 8vh 14px 16px;
+  }
+}
+
 @media (max-width: 560px) {
   .hero h1 {
     font-size: 2rem;
@@ -1507,11 +1578,58 @@ img {
     font-size: 1.6rem;
   }
 
+  .cabecalho {
+    align-items: stretch;
+  }
+
+  .botao-novo {
+    width: 100%;
+  }
+
+  .grade-projetos {
+    grid-template-columns: 1fr;
+  }
+
+  .proj-cabecalho {
+    align-items: flex-start;
+  }
+
   .proj-cabecalho-acoes {
     width: 100%;
   }
 
   .proj-cabecalho-acoes .botao {
     flex: 1;
+  }
+
+  .modal,
+  .palette {
+    max-width: none;
+  }
+
+  .modal {
+    padding: 20px;
+  }
+
+  .overlay {
+    padding: 6vh 12px 16px;
+  }
+}
+
+@media (max-width: 400px) {
+  .grade-videos.grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  .proj-acoes {
+    flex-direction: column;
+  }
+
+  .proj-acoes .botao {
+    width: 100%;
+  }
+
+  .conteudo {
+    padding: 20px 12px 52px;
   }
 }

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import ThemeToggle from './ThemeToggle';
 
 interface SidebarProps {
   aoBuscar: () => void;
@@ -9,7 +10,8 @@ interface SidebarProps {
 }
 
 const ITENS = [
-  { href: '/', rotulo: 'Projetos', icone: '🏠', exato: true },
+  { href: '/', rotulo: 'Baixador', icone: '⬇️', exato: true },
+  { href: '/projetos', rotulo: 'Projetos', icone: '📁', exato: false },
   { href: '/favoritos', rotulo: 'Favoritos', icone: '⭐', exato: false },
   { href: '/recentes', rotulo: 'Recentes', icone: '🕒', exato: false },
   { href: '/lixeira', rotulo: 'Lixeira', icone: '🗑️', exato: false },
@@ -52,9 +54,7 @@ export default function Sidebar({ aoBuscar, aoNavegar }: SidebarProps) {
       </nav>
 
       <div className="sidebar-rodape">
-        <Link href="/baixar" onClick={aoNavegar} className="sidebar-link secundario">
-          <span className="sidebar-icone">⬇️</span> Baixador avulso
-        </Link>
+        <ThemeToggle />
       </div>
     </aside>
   );

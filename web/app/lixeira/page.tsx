@@ -40,7 +40,7 @@ export default function PaginaLixeira() {
           <span className="vazio-icone">🗑️</span>
           <h2>Lixeira vazia</h2>
           <p>Nada por aqui.</p>
-          <Link href="/" className="botao botao-baixar">
+          <Link href="/projetos" className="botao botao-baixar">
             Ver projetos
           </Link>
         </div>

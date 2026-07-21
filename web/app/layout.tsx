@@ -15,6 +15,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
+      <head>
+        {/* Aplica o tema salvo antes da pintura, evitando flash de tema errado. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('nw:tema')||'escuro';document.documentElement.dataset.tema=t;}catch(e){document.documentElement.dataset.tema='escuro';}})();",
+          }}
+        />
+      </head>
       <body>
         <AppShell>{children}</AppShell>
       </body>

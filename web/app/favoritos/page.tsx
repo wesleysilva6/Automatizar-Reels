@@ -32,7 +32,7 @@ export default function PaginaFavoritos() {
           <span className="vazio-icone">⭐</span>
           <h2>Nada favoritado ainda</h2>
           <p>Toque na estrela de um projeto ou vídeo para vê-lo aqui.</p>
-          <Link href="/" className="botao botao-baixar">
+          <Link href="/projetos" className="botao botao-baixar">
             Ver projetos
           </Link>
         </div>

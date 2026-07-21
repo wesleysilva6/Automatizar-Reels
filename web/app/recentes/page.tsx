@@ -26,7 +26,7 @@ export default function PaginaRecentes() {
           <span className="vazio-icone">🕒</span>
           <h2>Sem atividade ainda</h2>
           <p>Abra um projeto ou importe um vídeo para ver o histórico aqui.</p>
-          <Link href="/" className="botao botao-baixar">
+          <Link href="/projetos" className="botao botao-baixar">
             Ver projetos
           </Link>
         </div>
