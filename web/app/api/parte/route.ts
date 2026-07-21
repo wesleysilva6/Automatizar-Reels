@@ -150,16 +150,44 @@ async function preparar(req: NextRequest): Promise<Preparado | { resposta: NextR
 
   const inicio = (parte - 1) * dur;
   const duracaoParte = Math.max(1, Math.min(dur, d.duration - inicio));
+
+  // Parâmetros de preset (opcionais). Quando "vb" (bitrate de vídeo) vem na query,
+  // exporta com resolução/fps/bitrate/áudio do preset da plataforma. Sem eles, o
+  // encode é exatamente o mesmo de antes (crf 21 / aac 128k) — retrocompatível.
+  const larg = parseInt(req.nextUrl.searchParams.get('w') ?? '', 10);
+  const alt = parseInt(req.nextUrl.searchParams.get('h') ?? '', 10);
+  const fps = parseInt(req.nextUrl.searchParams.get('fps') ?? '', 10);
+  const vb = parseInt(req.nextUrl.searchParams.get('vb') ?? '', 10); // kbps de vídeo
+  const ab = parseInt(req.nextUrl.searchParams.get('ab') ?? '', 10); // kbps de áudio
+  const temPreset = Number.isFinite(vb) && vb > 0;
+  const abFinal = temPreset && Number.isFinite(ab) && ab > 0 ? ab : 128;
+
+  const sufixo = temPreset ? `_${larg || 0}x${alt || 0}_${vb}` : '';
   const origem = join(tmpdir(), `nw_${d.id}.mp4`);
-  const saida = join(tmpdir(), `nw_${d.id}_${dur}_${parte}.mp4`);
+  const saida = join(tmpdir(), `nw_${d.id}_${dur}_${parte}${sufixo}.mp4`);
+
+  // Escala mantendo a proporção (com padding) + fps do preset, só no modo preset.
+  const filtros: string[] = [];
+  if (temPreset && larg > 0 && alt > 0) {
+    filtros.push(
+      `scale=${larg}:${alt}:force_original_aspect_ratio=decrease`,
+      `pad=${larg}:${alt}:(ow-iw)/2:(oh-ih)/2`,
+      'setsar=1',
+    );
+  }
+  if (temPreset && Number.isFinite(fps) && fps > 0) filtros.push(`fps=${fps}`);
 
   // Reencoda (como o NovaWave desktop) para o corte cair exatamente no segundo
   // pedido — com "-c copy" cairia no keyframe mais próximo.
   const ffArgs = [
     '-hide_banner', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1', '-y',
     '-ss', String(inicio), '-t', String(dur), '-i', origem,
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21',
-    '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart',
+    ...(filtros.length ? ['-vf', filtros.join(',')] : []),
+    '-c:v', 'libx264', '-preset', 'veryfast',
+    ...(temPreset
+      ? ['-b:v', `${vb}k`, '-maxrate', `${Math.round(vb * 1.5)}k`, '-bufsize', `${vb * 2}k`, '-pix_fmt', 'yuv420p']
+      : ['-crf', '21']),
+    '-c:a', 'aac', '-b:a', `${abFinal}k`, '-movflags', '+faststart',
     saida,
   ];
 

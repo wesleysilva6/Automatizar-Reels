@@ -11,10 +11,16 @@ type Ordenacao = 'recentes' | 'antigos' | 'titulo' | 'duracao';
 interface ListaVideosProps {
   videos: VideoEntry[];
   projetoAtualId?: string;
+  nomeProjeto?: string; // nome do projeto atual (para exportação/nome automático)
   legendaProjeto?: (v: VideoEntry) => string; // rótulo do projeto em telas globais
 }
 
-export default function ListaVideos({ videos, projetoAtualId, legendaProjeto }: ListaVideosProps) {
+export default function ListaVideos({
+  videos,
+  projetoAtualId,
+  nomeProjeto,
+  legendaProjeto,
+}: ListaVideosProps) {
   const [termo, setTermo] = useState('');
   const [ordenacao, setOrdenacao] = useState<Ordenacao>('recentes');
   const [modo, setModo] = useState<'grid' | 'lista'>('grid');
@@ -137,6 +143,7 @@ export default function ListaVideos({ videos, projetoAtualId, legendaProjeto }: 
               selecionado={selecionados.has(v.id)}
               aoSelecionar={selecionar}
               legendaProjeto={legendaProjeto?.(v)}
+              nomeProjeto={nomeProjeto}
             />
           ))}
         </div>

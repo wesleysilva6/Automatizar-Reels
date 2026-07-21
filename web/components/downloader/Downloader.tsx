@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { zip } from 'fflate';
 import { salvarVideo } from '@/lib/projetos/store';
+import { baixarBlob, executarParteSSE } from '@/lib/exportar/stream';
 
 interface VideoInfo {
   id: string;
@@ -157,13 +158,7 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
     return '/api/download?tipo=' + tipo + '&url=' + encodeURIComponent(linkBuscado);
   }
 
-  function dispararDownload(blob: Blob, nome: string) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = nome;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  }
+  const dispararDownload = baixarBlob;
 
   // Gera uma parte lendo o progresso em tempo real (SSE) e devolve o arquivo pronto.
   async function gerarParte(
@@ -180,46 +175,11 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
       ptot: String(totalExibido),
       url: linkBuscado,
     });
-    const res = await fetch('/api/parte?' + params.toString(), { signal });
-    if (!res.ok || !res.body) {
-      const json = await res.json().catch(() => null);
-      throw new Error(json?.error || 'Falha ao gerar a parte.');
-    }
-
-    const reader = res.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    let erroMsg: string | null = null;
-    let final: { nome: string; mime?: string; dados: string } | null = null;
-
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let idx: number;
-      while ((idx = buf.indexOf('\n\n')) >= 0) {
-        const bloco = buf.slice(0, idx);
-        buf = buf.slice(idx + 2);
-        const linha = bloco.split('\n').find((l) => l.startsWith('data:'));
-        if (!linha) continue;
-        const evento = JSON.parse(linha.slice(5).trim());
-        if (evento.tipo === 'progresso') {
-          onProgresso({ parte: localN, pct: evento.pct, rotulo: evento.rotulo });
-        } else if (evento.tipo === 'erro') {
-          erroMsg = evento.mensagem;
-        } else if (evento.tipo === 'fim') {
-          final = evento;
-        }
-      }
-    }
-
-    if (erroMsg) throw new Error(erroMsg);
-    if (!final) throw new Error('A geração não foi concluída. Tente de novo.');
-
-    const bin = atob(final.dados);
-    const bytes = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blob = new Blob([bytes], { type: final.mime || 'video/mp4' });
+    const { blob } = await executarParteSSE(
+      params,
+      (p) => onProgresso({ parte: localN, pct: p.pct, rotulo: p.rotulo }),
+      signal,
+    );
     const nome = `Parte ${pad2(numero)} de ${pad2(totalExibido)}.mp4`;
     return { blob, nome };
   }

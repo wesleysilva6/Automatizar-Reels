@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
 import BuscaGlobal from '@/components/busca/BuscaGlobal';
+import { ExportProvider } from '@/contexts/ExportContext';
+import Toasts from '@/components/exportar/Toasts';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [menuAberto, setMenuAberto] = useState(false);
@@ -28,6 +30,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
+    <ExportProvider>
     <div className="app">
       {/* Barra superior só no mobile: abre o menu e a busca. */}
       <header className="topbar">
@@ -57,6 +60,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <BuscaGlobal aberto={buscaAberta} aoFechar={() => setBuscaAberta(false)} />
+      <Toasts />
     </div>
+    </ExportProvider>
   );
 }

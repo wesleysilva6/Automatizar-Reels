@@ -3,6 +3,7 @@
 import { alternarFavoritoVideo, enviarParaLixeira } from '@/lib/projetos/store';
 import { duracaoMMSS, tempoRelativo } from '@/lib/formato';
 import type { VideoEntry } from '@/lib/projetos/tipos';
+import { useExport } from '@/contexts/ExportContext';
 
 interface VideoCardProps {
   video: VideoEntry;
@@ -10,6 +11,7 @@ interface VideoCardProps {
   selecionado: boolean;
   aoSelecionar: (id: string, marcado: boolean) => void;
   legendaProjeto?: string; // usado em telas globais (favoritos/recentes)
+  nomeProjeto?: string; // nome do projeto atual (para o nome automático)
 }
 
 export default function VideoCard({
@@ -18,7 +20,19 @@ export default function VideoCard({
   selecionado,
   aoSelecionar,
   legendaProjeto,
+  nomeProjeto,
 }: VideoCardProps) {
+  const { enfileirar } = useExport();
+
+  function exportar() {
+    enfileirar({
+      url: video.url,
+      titulo: video.titulo,
+      duracao: video.duracao,
+      projetoNome: legendaProjeto ?? nomeProjeto,
+    });
+  }
+
   return (
     <div className={`video-card ${modo}${selecionado ? ' selecionado' : ''}`}>
       <input
@@ -48,6 +62,9 @@ export default function VideoCard({
       </div>
 
       <div className="video-acoes">
+        <button className="icone-btn destaque" onClick={exportar} title="Exportar" aria-label="Exportar">
+          📤
+        </button>
         <button
           className={`icone-btn${video.favorito ? ' ativo' : ''}`}
           onClick={() => alternarFavoritoVideo(video.id)}

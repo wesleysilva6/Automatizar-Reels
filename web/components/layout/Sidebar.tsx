@@ -12,6 +12,7 @@ interface SidebarProps {
 const ITENS = [
   { href: '/', rotulo: 'Baixador', icone: '⬇️', exato: true },
   { href: '/projetos', rotulo: 'Projetos', icone: '📁', exato: false },
+  { href: '/exportar', rotulo: 'Exportar', icone: '📤', exato: false },
   { href: '/favoritos', rotulo: 'Favoritos', icone: '⭐', exato: false },
   { href: '/recentes', rotulo: 'Recentes', icone: '🕒', exato: false },
   { href: '/lixeira', rotulo: 'Lixeira', icone: '🗑️', exato: false },

@@ -89,7 +89,7 @@ export default function PaginaProjeto({ params }: { params: Promise<{ id: string
 
       <section className="secao">
         <h2 className="secao-titulo">Vídeos</h2>
-        <ListaVideos videos={videos} projetoAtualId={projeto.id} />
+        <ListaVideos videos={videos} projetoAtualId={projeto.id} nomeProjeto={projeto.nome} />
       </section>
 
       <ModalProjeto aberto={editar} projeto={projeto} aoFechar={() => setEditar(false)} />
