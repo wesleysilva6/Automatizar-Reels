@@ -11,8 +11,18 @@ export async function executarParteSSE(
   params: URLSearchParams,
   onProgresso: (p: ProgressoSSE) => void,
   signal: AbortSignal,
+  overlay?: Blob | null,
 ): Promise<{ blob: Blob; nomeServidor: string }> {
-  const res = await fetch('/api/parte?' + params.toString(), { signal });
+  // Com título, precisa enviar o PNG do overlay → POST (multipart). Sem, GET normal.
+  let res: Response;
+  if (overlay) {
+    const form = new FormData();
+    params.forEach((valor, chave) => form.append(chave, valor));
+    form.append('overlay', overlay, 'overlay.png');
+    res = await fetch('/api/parte', { method: 'POST', body: form, signal });
+  } else {
+    res = await fetch('/api/parte?' + params.toString(), { signal });
+  }
   if (!res.ok || !res.body) {
     const json = await res.json().catch(() => null);
     throw new Error(json?.error || 'Falha ao processar o vídeo.');

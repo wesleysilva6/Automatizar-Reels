@@ -5,10 +5,7 @@ const nextConfig: NextConfig = {
   // continuar em node_modules e ser levado junto no deploy.
   serverExternalPackages: ["ffmpeg-static"],
   outputFileTracingIncludes: {
-    "/api/parte": [
-      "./node_modules/ffmpeg-static/ffmpeg*",
-      "./assets/fonts/Anton-Regular.ttf",
-    ],
+    "/api/parte": ["./node_modules/ffmpeg-static/ffmpeg*"],
   },
 };
 

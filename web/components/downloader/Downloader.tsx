@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { zip } from 'fflate';
 import { salvarVideo } from '@/lib/projetos/store';
 import { baixarBlob, executarParteSSE } from '@/lib/exportar/stream';
+import { gerarOverlayTitulo } from '@/lib/exportar/overlay';
 
 interface VideoInfo {
   id: string;
@@ -177,14 +178,15 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
       ptot: String(totalExibido),
       url: linkBuscado,
     });
-    // Grava o título no topo do vídeo, com o número desta parte.
-    if (tituloVideo.trim()) {
-      params.set('legenda', `${tituloVideo.trim().toUpperCase()} — PARTE ${numero}`);
-    }
+    // Com título, gera o PNG do overlay desta parte (título + número) no navegador.
+    const overlay = tituloVideo.trim()
+      ? await gerarOverlayTitulo(`${tituloVideo.trim()} — PARTE ${numero}`)
+      : undefined;
     const { blob } = await executarParteSSE(
       params,
       (p) => onProgresso({ parte: localN, pct: p.pct, rotulo: p.rotulo }),
       signal,
+      overlay,
     );
     const nome = `Parte ${pad2(numero)} de ${pad2(totalExibido)}.mp4`;
     return { blob, nome };
