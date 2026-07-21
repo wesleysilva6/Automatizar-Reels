@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import AppShell from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
-  title: 'NovaWave — Baixar vídeo do TikTok em HD sem marca d’água',
+  title: 'NovaWave — Organize e baixe seus vídeos do TikTok',
   description:
-    'Cole o link do TikTok e baixe o vídeo em HD, sem marca d’água, com áudio. Também baixa só a música.',
+    'Organize seus vídeos do TikTok em projetos e baixe em HD, sem marca d’água, com áudio.',
 };
 
 export default function RootLayout({
@@ -14,7 +15,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

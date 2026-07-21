@@ -29,8 +29,9 @@ async function baixarComProgresso(
   link: string,
   destino: string,
   onPct: (pct: number) => void,
+  signal: AbortSignal,
 ): Promise<void> {
-  const upstream = await fetch(link, { headers: { 'User-Agent': UA } });
+  const upstream = await fetch(link, { headers: { 'User-Agent': UA }, signal });
   if (!upstream.ok || !upstream.body) {
     throw new Error(`O CDN do TikTok respondeu ${upstream.status}`);
   }
@@ -46,9 +47,14 @@ async function baixarComProgresso(
       if (!ws.write(value)) await once(ws, 'drain');
       if (total) onPct(Math.min(1, recebido / total));
     }
-  } finally {
     ws.end();
     await once(ws, 'finish');
+  } catch (e) {
+    // Cliente desistiu (ou a rede caiu): descarta o arquivo parcial para a
+    // próxima tentativa baixar do zero, em vez de cortar um vídeo truncado.
+    ws.destroy();
+    await unlink(destino).catch(() => {});
+    throw e;
   }
 }
 
@@ -57,13 +63,21 @@ function cortarComProgresso(
   args: string[],
   duracaoParte: number,
   onPct: (pct: number) => void,
+  signal: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     if (!ffmpegPath) {
       reject(new Error('ffmpeg não está disponível neste ambiente'));
       return;
     }
+    if (signal.aborted) {
+      reject(new Error('Geração cancelada.'));
+      return;
+    }
     const proc = spawn(ffmpegPath, args);
+    // Mata o ffmpeg se o cliente desistir, para não gastar CPU à toa.
+    const aoAbortar = () => proc.kill();
+    signal.addEventListener('abort', aoAbortar);
     let stderr = '';
     let buf = '';
     proc.stdout.on('data', (d) => {
@@ -81,9 +95,14 @@ function cortarComProgresso(
     proc.stderr.on('data', (d) => {
       stderr += String(d);
     });
-    proc.on('error', reject);
+    proc.on('error', (e) => {
+      signal.removeEventListener('abort', aoAbortar);
+      reject(e);
+    });
     proc.on('close', (code) => {
-      if (code === 0) resolve();
+      signal.removeEventListener('abort', aoAbortar);
+      if (signal.aborted) reject(new Error('Geração cancelada.'));
+      else if (code === 0) resolve();
       else reject(new Error(`ffmpeg saiu com código ${code}: ${stderr.slice(-400)}`));
     });
   });
@@ -151,6 +170,10 @@ async function preparar(req: NextRequest): Promise<Preparado | { resposta: NextR
 
 export async function GET(req: NextRequest) {
   const streaming = req.nextUrl.searchParams.get('stream') === '1';
+  // Se o cliente fechar a aba / cancelar, aborta o download e o ffmpeg em andamento.
+  const ac = new AbortController();
+  const aoDesistir = () => ac.abort();
+  req.signal.addEventListener('abort', aoDesistir);
   try {
     const prep = await preparar(req);
     if ('resposta' in prep) return prep.resposta;
@@ -159,14 +182,19 @@ export async function GET(req: NextRequest) {
     if (!streaming) {
       // Modo simples (compatível com uso direto da URL): baixa, corta e devolve o arquivo.
       if (!(await existe(origem))) {
-        const upstream = await fetch(link, { headers: { 'User-Agent': UA } });
+        const upstream = await fetch(link, { headers: { 'User-Agent': UA }, signal: ac.signal });
         if (!upstream.ok || !upstream.body) {
           return NextResponse.json({ error: `O CDN do TikTok respondeu ${upstream.status}.` }, { status: 502 });
         }
         const web = upstream.body as unknown as import('node:stream/web').ReadableStream;
-        await pipeline(Readable.fromWeb(web), createWriteStream(origem));
+        try {
+          await pipeline(Readable.fromWeb(web), createWriteStream(origem));
+        } catch (e) {
+          await unlink(origem).catch(() => {});
+          throw e;
+        }
       }
-      await cortarComProgresso(ffArgs, duracaoParte, () => {});
+      await cortarComProgresso(ffArgs, duracaoParte, () => {}, ac.signal);
       const buf = await readFile(saida);
       unlink(saida).catch(() => {});
       return new Response(new Uint8Array(buf), {
@@ -197,24 +225,36 @@ export async function GET(req: NextRequest) {
           // Fase 1: download (só na primeira parte; as seguintes reaproveitam o /tmp).
           if (precisaBaixar) {
             progresso(0, 'Baixando vídeo...');
-            await baixarComProgresso(link, origem, (p) => progresso(p * 0.4, 'Baixando vídeo...'));
+            await baixarComProgresso(link, origem, (p) => progresso(p * 0.4, 'Baixando vídeo...'), ac.signal);
           }
           // Fase 2: corte + reencode.
           const base = precisaBaixar ? 0.4 : 0;
           const escala = precisaBaixar ? 0.6 : 1;
           progresso(base, 'Cortando a parte...');
-          await cortarComProgresso(ffArgs, duracaoParte, (p) =>
-            progresso(base + p * escala, 'Cortando a parte...'),
+          await cortarComProgresso(
+            ffArgs,
+            duracaoParte,
+            (p) => progresso(base + p * escala, 'Cortando a parte...'),
+            ac.signal,
           );
           progresso(1, 'Finalizando...');
           const buf = await readFile(saida);
           unlink(saida).catch(() => {});
           send({ tipo: 'fim', nome, mime: 'video/mp4', dados: buf.toString('base64') });
         } catch (e) {
-          send({ tipo: 'erro', mensagem: e instanceof Error ? e.message : 'Erro desconhecido' });
+          // Remove qualquer saída parcial deixada por um corte interrompido.
+          unlink(saida).catch(() => {});
+          // Se foi o próprio cliente que desistiu, não há para quem mandar o erro.
+          if (!ac.signal.aborted) {
+            send({ tipo: 'erro', mensagem: e instanceof Error ? e.message : 'Erro desconhecido' });
+          }
         } finally {
           controller.close();
         }
+      },
+      cancel() {
+        // Consumidor (navegador) fechou a conexão: aborta o trabalho em andamento.
+        ac.abort();
       },
     });
 
@@ -232,5 +272,7 @@ export async function GET(req: NextRequest) {
       { error: `Falha ao gerar a parte (${msg}). Tente de novo em instantes.` },
       { status: 502 },
     );
+  } finally {
+    req.signal.removeEventListener('abort', aoDesistir);
   }
 }
