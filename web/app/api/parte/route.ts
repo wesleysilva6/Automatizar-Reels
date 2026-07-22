@@ -193,12 +193,15 @@ async function preparar(
 
   let ffArgs: string[];
   if (overlayPath) {
-    // Sobrepõe o PNG do título: scale2ref ajusta a imagem ao tamanho do vídeo
-    // (funciona para qualquer resolução) e overlay=0:0 a aplica sobre o quadro.
+    // Sobrepõe o PNG do título. "-loop 1" transforma a imagem num fluxo contínuo
+    // (senão o título só apareceria no 1º frame e o vídeo sairia quebrado);
+    // scale2ref ajusta a imagem a qualquer resolução; "shortest=1" encerra junto
+    // com o vídeo; "format=yuv420p" garante um pixel format que todo player abre.
     ffArgs = [
       ...cabecalho,
-      '-i', overlayPath,
-      '-filter_complex', '[1:v][0:v]scale2ref[ov][base];[base][ov]overlay=0:0[vout]',
+      '-loop', '1', '-i', overlayPath,
+      '-filter_complex',
+      '[1:v][0:v]scale2ref[ov][base];[base][ov]overlay=0:0:shortest=1,format=yuv420p[vout]',
       '-map', '[vout]', '-map', '0:a?',
       '-c:v', 'libx264', '-preset', 'veryfast', ...encodeVid,
       ...encodeAudio,
