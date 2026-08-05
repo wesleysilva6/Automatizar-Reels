@@ -3,9 +3,9 @@ import './globals.css';
 import AppShell from '@/components/layout/AppShell';
 
 export const metadata: Metadata = {
-  title: 'NovaWave — Organize e baixe seus vídeos do TikTok',
+  title: 'NovaWave — Organize e baixe seus vídeos do TikTok e do YouTube',
   description:
-    'Organize seus vídeos do TikTok em projetos e baixe em HD, sem marca d’água, com áudio.',
+    'Organize seus vídeos do TikTok e do YouTube em projetos, corte em partes e baixe em HD, com áudio.',
 };
 
 export default function RootLayout({

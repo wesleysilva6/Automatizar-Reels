@@ -79,7 +79,7 @@ export default function PaginaProjeto({ params }: { params: Promise<{ id: string
 
       {importar && (
         <section className="painel-importar">
-          <h2 className="secao-titulo">Importar do TikTok</h2>
+          <h2 className="secao-titulo">Importar do TikTok ou do YouTube</h2>
           <p className="subtitulo">
             Busque um link: o vídeo é salvo neste projeto e você já pode baixá-lo em partes.
           </p>

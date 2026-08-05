@@ -8,12 +8,21 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import ffmpegPath from 'ffmpeg-static';
-import { fetchVideoInfo, isTikTokUrl } from '@/lib/tikwm';
+import { ERRO_LINK, obterInfo, urlSuportada } from '@/lib/provedores';
 
 // Baixar o vídeo + reencodar uma parte pode passar de 1 minuto.
 export const maxDuration = 300;
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)';
+
+// Opções do protocolo HTTP aplicadas a cada entrada remota: sem elas, uma queda
+// momentânea de rede no meio de um vídeo longo aborta o corte inteiro.
+const RECONEXAO = [
+  '-reconnect', '1',
+  '-reconnect_streamed', '1',
+  '-reconnect_delay_max', '5',
+  '-user_agent', UA,
+];
 
 async function existe(caminho: string): Promise<boolean> {
   try {
@@ -33,7 +42,7 @@ async function baixarComProgresso(
 ): Promise<void> {
   const upstream = await fetch(link, { headers: { 'User-Agent': UA }, signal });
   if (!upstream.ok || !upstream.body) {
-    throw new Error(`O CDN do TikTok respondeu ${upstream.status}`);
+    throw new Error(`O servidor de origem respondeu ${upstream.status}`);
   }
   const total = Number(upstream.headers.get('content-length')) || 0;
   const ws = createWriteStream(destino);
@@ -109,6 +118,9 @@ function cortarComProgresso(
 }
 
 interface Preparado {
+  /** No modo "remoto" o ffmpeg lê a URL direto: não há nada para baixar antes. */
+  usarArquivo: boolean;
+  /** Só vale com `usarArquivo`: o que baixar e onde guardar no /tmp. */
   link: string;
   origem: string;
   saida: string;
@@ -118,58 +130,93 @@ interface Preparado {
   overlayPath: string | null;
 }
 
+function inteiro(params: URLSearchParams, chave: string): number {
+  return parseInt(params.get(chave) ?? '', 10);
+}
+
 // Valida os parâmetros e monta os caminhos/argumentos do ffmpeg. Quando há um
 // overlayPath (PNG do título vindo do cliente), grava-o sobre o vídeo com o filtro
 // nativo "overlay" — nada de "drawtext", que não existe em todo build de ffmpeg.
 async function preparar(
   params: URLSearchParams,
   overlayPath: string | null,
+  signal: AbortSignal,
 ): Promise<Preparado | { resposta: NextResponse }> {
   const url = (params.get('url') ?? '').trim();
-  if (!url || !isTikTokUrl(url)) {
-    return { resposta: NextResponse.json({ error: 'Cole um link válido do TikTok.' }, { status: 400 }) };
+  if (!url || !urlSuportada(url)) {
+    return { resposta: NextResponse.json({ error: ERRO_LINK }, { status: 400 }) };
   }
-  const dur = Math.min(600, Math.max(5, parseInt(params.get('dur') ?? '59', 10) || 59));
-  const parte = parseInt(params.get('parte') ?? '1', 10);
+  const dur = Math.min(600, Math.max(5, inteiro(params, 'dur') || 59));
+  const parte = inteiro(params, 'parte');
 
-  const d = await fetchVideoInfo(url);
-  const total = Math.max(1, Math.ceil(d.duration / dur));
+  const d = await obterInfo(url, signal);
+
+  // Trecho do vídeo a fatiar. Sem "ini"/"fim" na query pega o vídeo inteiro —
+  // é o comportamento de antes, então links antigos continuam valendo.
+  const iniBruto = inteiro(params, 'ini');
+  const fimBruto = inteiro(params, 'fim');
+  const ini = Math.min(Math.max(Number.isFinite(iniBruto) ? iniBruto : 0, 0), Math.max(0, d.duracao - 1));
+  const fim = Math.min(
+    Math.max(Number.isFinite(fimBruto) && fimBruto > 0 ? fimBruto : d.duracao, ini + 1),
+    d.duracao,
+  );
+
+  const total = Math.max(1, Math.ceil((fim - ini) / dur));
   if (!Number.isFinite(parte) || parte < 1 || parte > total) {
     return {
       resposta: NextResponse.json(
-        { error: `Parte inválida: esse vídeo tem ${total} parte(s) de ${dur}s.` },
+        { error: `Parte inválida: esse trecho tem ${total} parte(s) de ${dur}s.` },
         { status: 400 },
       ),
     };
   }
-  const link = d.hdplay || d.play;
-  if (!link) {
+
+  const remoto = d.leitura === 'remoto';
+  // No modo remoto o ffmpeg lê as URLs por HTTP e busca só o intervalo pedido;
+  // no modo arquivo, corta do mp4 já baixado no /tmp.
+  const fonteVideo = d.hd ?? d.sd;
+  if (!fonteVideo) {
     return { resposta: NextResponse.json({ error: 'Vídeo indisponível para download.' }, { status: 404 }) };
   }
 
   // Números exibidos no nome do arquivo (permitem continuar a contagem entre vídeos).
-  const pnum = parseInt(params.get('pnum') ?? '', 10);
-  const ptot = parseInt(params.get('ptot') ?? '', 10);
+  const pnum = inteiro(params, 'pnum');
+  const ptot = inteiro(params, 'ptot');
   const numExibido = Number.isFinite(pnum) && pnum > 0 ? pnum : parte;
   const totExibido = Number.isFinite(ptot) && ptot > 0 ? ptot : total;
 
-  const inicio = (parte - 1) * dur;
-  const duracaoParte = Math.max(1, Math.min(dur, d.duration - inicio));
+  const inicio = ini + (parte - 1) * dur;
+  const duracaoParte = Math.max(1, Math.min(dur, fim - inicio));
 
   // Parâmetros de preset (opcionais). Quando "vb" (bitrate de vídeo) vem na query,
   // exporta com resolução/fps/bitrate/áudio do preset da plataforma. Sem eles, o
   // encode é exatamente o mesmo de antes (crf 21 / aac 128k) — retrocompatível.
-  const larg = parseInt(params.get('w') ?? '', 10);
-  const alt = parseInt(params.get('h') ?? '', 10);
-  const fps = parseInt(params.get('fps') ?? '', 10);
-  const vb = parseInt(params.get('vb') ?? '', 10); // kbps de vídeo
-  const ab = parseInt(params.get('ab') ?? '', 10); // kbps de áudio
+  const larg = inteiro(params, 'w');
+  const alt = inteiro(params, 'h');
+  const fps = inteiro(params, 'fps');
+  const vb = inteiro(params, 'vb'); // kbps de vídeo
+  const ab = inteiro(params, 'ab'); // kbps de áudio
   const temPreset = Number.isFinite(vb) && vb > 0;
   const abFinal = temPreset && Number.isFinite(ab) && ab > 0 ? ab : 128;
 
-  const sufixo = `${temPreset ? `_${larg || 0}x${alt || 0}_${vb}` : ''}${overlayPath ? '_ov' : ''}`;
-  const origem = join(tmpdir(), `nw_${d.id}.mp4`);
-  const saida = join(tmpdir(), `nw_${d.id}_${dur}_${parte}${sufixo}.mp4`);
+  const origem = join(tmpdir(), `nw_${d.origem}_${d.id}.mp4`);
+  // A saída é sempre descartada depois de entregue; o sufixo aleatório evita que
+  // dois pedidos simultâneos da mesma parte escrevam no mesmo arquivo.
+  const saida = join(tmpdir(), `nw_out_${Date.now()}_${Math.random().toString(36).slice(2)}.mp4`);
+
+  // Entradas de mídia, na ordem em que o ffmpeg vai numerá-las ([0:v], [1:a]...).
+  const recorte = ['-ss', String(inicio), '-t', String(duracaoParte)];
+  const entradas: string[] = [];
+  if (remoto) {
+    entradas.push(...recorte, ...RECONEXAO, '-i', fonteVideo);
+    if (d.faixaAudio) entradas.push(...recorte, ...RECONEXAO, '-i', d.faixaAudio);
+  } else {
+    entradas.push(...recorte, '-i', origem);
+  }
+  // Com faixa separada (YouTube em DASH) o áudio é a segunda entrada; senão vem
+  // junto do vídeo, e o "?" deixa passar vídeos mudos sem quebrar o encode.
+  const mapaAudio = remoto && d.faixaAudio ? '1:a:0' : '0:a?';
+  const indiceOverlay = remoto && d.faixaAudio ? 2 : 1;
 
   // Escala/fps do preset (só no modo preset).
   const filtros: string[] = [];
@@ -182,10 +229,7 @@ async function preparar(
   }
   if (temPreset && Number.isFinite(fps) && fps > 0) filtros.push(`fps=${fps}`);
 
-  const cabecalho = [
-    '-hide_banner', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1', '-y',
-    '-ss', String(inicio), '-t', String(dur), '-i', origem,
-  ];
+  const cabecalho = ['-hide_banner', '-loglevel', 'error', '-nostats', '-progress', 'pipe:1', '-y'];
   const encodeVid = temPreset
     ? ['-b:v', `${vb}k`, '-maxrate', `${Math.round(vb * 1.5)}k`, '-bufsize', `${vb * 2}k`, '-pix_fmt', 'yuv420p']
     : ['-crf', '21'];
@@ -194,15 +238,20 @@ async function preparar(
   let ffArgs: string[];
   if (overlayPath) {
     // Sobrepõe o PNG do título. "-loop 1" transforma a imagem num fluxo contínuo
-    // (senão o título só apareceria no 1º frame e o vídeo sairia quebrado);
-    // scale2ref ajusta a imagem a qualquer resolução; "shortest=1" encerra junto
-    // com o vídeo; "format=yuv420p" garante um pixel format que todo player abre.
+    // (senão o título só apareceria no 1º frame e o vídeo sairia quebrado). O
+    // scale2ref encaixa a imagem no tamanho exato do quadro; como o navegador já
+    // a desenha na PROPORÇÃO do vídeo (ver /api/video → largura/altura), esse
+    // ajuste é uniforme e não deforma o texto. "shortest=1" encerra junto com o
+    // vídeo e "format=yuv420p" garante um pixel format que todo player abre.
+    const base = filtros.length ? filtros.join(',') : 'null';
     ffArgs = [
       ...cabecalho,
+      ...entradas,
       '-loop', '1', '-i', overlayPath,
       '-filter_complex',
-      '[1:v][0:v]scale2ref[ov][base];[base][ov]overlay=0:0:shortest=1,format=yuv420p[vout]',
-      '-map', '[vout]', '-map', '0:a?',
+      `[0:v]${base}[b];[${indiceOverlay}:v][b]scale2ref[ov][bb];` +
+        `[bb][ov]overlay=0:0:shortest=1,format=yuv420p[vout]`,
+      '-map', '[vout]', '-map', mapaAudio,
       '-c:v', 'libx264', '-preset', 'veryfast', ...encodeVid,
       ...encodeAudio,
       saida,
@@ -210,7 +259,9 @@ async function preparar(
   } else {
     ffArgs = [
       ...cabecalho,
+      ...entradas,
       ...(filtros.length ? ['-vf', filtros.join(',')] : []),
+      '-map', '0:v:0', '-map', mapaAudio,
       '-c:v', 'libx264', '-preset', 'veryfast', ...encodeVid,
       ...encodeAudio,
       saida,
@@ -219,7 +270,16 @@ async function preparar(
 
   const nome = `Parte ${String(numExibido).padStart(2, '0')} de ${String(totExibido).padStart(2, '0')}.mp4`;
 
-  return { link, origem, saida, ffArgs, duracaoParte, nome, overlayPath };
+  return {
+    usarArquivo: !remoto,
+    link: fonteVideo,
+    origem,
+    saida,
+    ffArgs,
+    duracaoParte,
+    nome,
+    overlayPath,
+  };
 }
 
 // Executa o pipeline (download + ffmpeg) e devolve a Response (streaming SSE ou arquivo).
@@ -233,19 +293,19 @@ async function responder(
     if (overlayPath) unlink(overlayPath).catch(() => {});
   };
 
-  const prep = await preparar(params, overlayPath);
+  const prep = await preparar(params, overlayPath, ac.signal);
   if ('resposta' in prep) {
     limparOverlay();
     return prep.resposta;
   }
-  const { link, origem, saida, ffArgs, duracaoParte, nome } = prep;
+  const { usarArquivo, link, origem, saida, ffArgs, duracaoParte, nome } = prep;
 
   if (!streaming) {
-    if (!(await existe(origem))) {
+    if (usarArquivo && !(await existe(origem))) {
       const upstream = await fetch(link, { headers: { 'User-Agent': UA }, signal: ac.signal });
       if (!upstream.ok || !upstream.body) {
         limparOverlay();
-        return NextResponse.json({ error: `O CDN do TikTok respondeu ${upstream.status}.` }, { status: 502 });
+        return NextResponse.json({ error: `O servidor de origem respondeu ${upstream.status}.` }, { status: 502 });
       }
       const web = upstream.body as unknown as import('node:stream/web').ReadableStream;
       try {
@@ -271,7 +331,8 @@ async function responder(
 
   // Modo streaming (SSE): relata progresso real e entrega o arquivo no evento final.
   const encoder = new TextEncoder();
-  const precisaBaixar = !(await existe(origem));
+  // No modo remoto não existe fase de download: o ffmpeg busca o trecho sozinho.
+  const precisaBaixar = usarArquivo && !(await existe(origem));
   const stream = new ReadableStream({
     async start(controller) {
       const send = (o: unknown) => {
@@ -287,7 +348,12 @@ async function responder(
         // Fase 1: download (só na primeira parte; as seguintes reaproveitam o /tmp).
         if (precisaBaixar) {
           progresso(0, 'Baixando vídeo...');
-          await baixarComProgresso(link, origem, (p) => progresso(p * 0.4, 'Baixando vídeo...'), ac.signal);
+          await baixarComProgresso(
+            link,
+            origem,
+            (p) => progresso(p * 0.4, 'Baixando vídeo...'),
+            ac.signal,
+          );
         }
         // Fase 2: corte + reencode.
         const base = precisaBaixar ? 0.4 : 0;

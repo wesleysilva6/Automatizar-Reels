@@ -22,12 +22,19 @@ function garantirFonte(): Promise<void> {
   return fontePronta;
 }
 
-// PNG 1080x1920 transparente com o título no topo (branco + contorno preto).
-export async function gerarOverlayTitulo(texto: string): Promise<Blob> {
+// PNG transparente com o título no topo (branco + contorno preto), do MESMO
+// tamanho do vídeo — assim o servidor sobrepõe sem redimensionar, e o texto sai
+// com a proporção certa tanto num vídeo em pé (TikTok) quanto deitado (YouTube).
+export async function gerarOverlayTitulo(
+  texto: string,
+  largura = 1080,
+  altura = 1920,
+): Promise<Blob> {
   await garantirFonte();
 
-  const L = 1080;
-  const A = 1920;
+  // Larguras/alturas ímpares atrapalham o encode em yuv420p.
+  const L = Math.max(2, Math.round(largura / 2) * 2);
+  const A = Math.max(2, Math.round(altura / 2) * 2);
   const canvas = document.createElement('canvas');
   canvas.width = L;
   canvas.height = A;
@@ -35,13 +42,17 @@ export async function gerarOverlayTitulo(texto: string): Promise<Blob> {
   if (!ctx) throw new Error('Canvas indisponível neste navegador.');
 
   const t = texto.toUpperCase();
-  const margem = 60;
-  let tamanho = 78;
+  // Medidas proporcionais ao menor lado: num vídeo 1080x1920 dão exatamente os
+  // valores originais (fonte 78, margem 60), e num 16:9 o título não sai gigante.
+  const menorLado = Math.min(L, A);
+  const margem = Math.round(L * 0.0556);
+  const minimo = Math.round(menorLado * 0.037);
+  let tamanho = Math.round(menorLado * 0.0722);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
 
   // Reduz a fonte até caber na largura (com margem), evitando transbordar.
-  for (; tamanho > 40; tamanho -= 2) {
+  for (; tamanho > minimo; tamanho -= 2) {
     ctx.font = `${tamanho}px Anton, Arial, sans-serif`;
     if (ctx.measureText(t).width <= L - margem * 2) break;
   }

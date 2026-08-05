@@ -1435,6 +1435,37 @@ img {
   border-color: var(--acento);
 }
 
+/* Campos de trecho (início/fim): aceitam "1:30", por isso são texto e não number. */
+.numeracao input[type='text'] {
+  width: 78px;
+  padding: 6px 8px;
+  border: 1px solid var(--borda-forte);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  text-align: center;
+  outline: none;
+  background: var(--bg-2);
+  color: var(--texto);
+}
+
+.numeracao input[type='text']:focus {
+  border-color: var(--acento);
+}
+
+.botao-trecho-tudo {
+  padding: 6px 12px;
+  font-size: 0.85rem;
+}
+
+.dica-erro {
+  background: color-mix(in srgb, var(--perigo) 16%, transparent);
+  color: var(--perigo-txt);
+}
+
+.dica-erro strong {
+  color: inherit;
+}
+
 .dica-numeracao {
   font-size: 0.85rem;
   color: var(--texto-2);

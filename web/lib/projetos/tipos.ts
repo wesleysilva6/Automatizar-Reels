@@ -16,7 +16,7 @@ export interface Projeto {
 export interface VideoEntry {
   id: string;
   projetoId: string;
-  url: string; // link original do TikTok
+  url: string; // link original (TikTok ou YouTube)
   titulo: string;
   capa: string;
   autor: string;

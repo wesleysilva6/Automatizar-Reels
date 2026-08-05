@@ -56,7 +56,7 @@ export default function VideoCard({
       <div className="video-info">
         <span className="video-titulo">{video.titulo}</span>
         <span className="video-sub">
-          {video.autor ? `@${video.autor}` : 'TikTok'}
+          {video.autor ? `@${video.autor}` : 'Vídeo'}
           {legendaProjeto ? ` • ${legendaProjeto}` : ''} • {tempoRelativo(video.atualizadoEm)}
         </span>
       </div>
@@ -78,8 +78,8 @@ export default function VideoCard({
           href={video.url}
           target="_blank"
           rel="noreferrer"
-          title="Abrir no TikTok"
-          aria-label="Abrir no TikTok"
+          title="Abrir o vídeo original"
+          aria-label="Abrir o vídeo original"
         >
           ↗
         </a>

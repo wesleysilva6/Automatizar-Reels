@@ -1,26 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchVideoInfo, isTikTokUrl } from '@/lib/tikwm';
+import { ERRO_LINK, obterInfo, urlSuportada } from '@/lib/provedores';
+
+// Resolver um link do YouTube roda o yt-dlp, que leva alguns segundos.
+export const maxDuration = 120;
 
 export async function GET(req: NextRequest) {
   const url = (req.nextUrl.searchParams.get('url') ?? '').trim();
-  if (!url || !isTikTokUrl(url)) {
-    return NextResponse.json({ error: 'Cole um link válido do TikTok.' }, { status: 400 });
+  if (!url || !urlSuportada(url)) {
+    return NextResponse.json({ error: ERRO_LINK }, { status: 400 });
   }
 
   try {
-    const d = await fetchVideoInfo(url);
-    const partes = Math.max(1, Math.ceil(d.duration / 59));
+    const d = await obterInfo(url, req.signal);
+    const partes = Math.max(1, Math.ceil(d.duracao / 59));
     return NextResponse.json({
       id: d.id,
-      title: d.title || '(sem descrição)',
-      cover: d.cover,
-      duration: d.duration,
+      origem: d.origem,
+      title: d.titulo,
+      cover: d.capa,
+      duration: d.duracao,
       partes,
-      author: d.author?.unique_id ?? '',
-      temHd: Boolean(d.hdplay),
-      temMusica: Boolean(d.music),
-      tamanhoHd: d.hd_size ?? null,
-      tamanhoSd: d.size ?? null,
+      author: d.autor,
+      largura: d.largura,
+      altura: d.altura,
+      temHd: Boolean(d.hd),
+      temMusica: Boolean(d.musica),
+      extMusica: d.extMusica,
+      tamanhoHd: d.tamanhoHd,
+      tamanhoSd: d.tamanhoSd,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Erro desconhecido';

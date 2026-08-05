@@ -8,13 +8,17 @@ import { gerarOverlayTitulo } from '@/lib/exportar/overlay';
 
 interface VideoInfo {
   id: string;
+  origem: 'tiktok' | 'youtube';
   title: string;
   cover: string;
   duration: number;
   partes: number;
   author: string;
+  largura: number;
+  altura: number;
   temHd: boolean;
   temMusica: boolean;
+  extMusica: '.mp3' | '.m4a';
   tamanhoHd: number | null;
   tamanhoSd: number | null;
 }
@@ -38,6 +42,16 @@ function formatarDuracao(seg: number): string {
   const m = Math.floor(seg / 60);
   const s = Math.floor(seg % 60);
   return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+// Lê um tempo digitado pelo usuário: aceita "90", "1:30" e "1:02:03".
+// Devolve null quando o campo está vazio ou o texto não é um tempo válido.
+function lerTempo(txt: string): number | null {
+  const t = txt.trim();
+  if (!t) return null;
+  const campos = t.split(':');
+  if (campos.length > 3 || campos.some((c) => !/^\d{1,3}$/.test(c.trim()))) return null;
+  return campos.reduce((acc, c) => acc * 60 + parseInt(c, 10), 0);
 }
 
 function formatarTamanho(bytes: number | null): string {
@@ -70,6 +84,10 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
   // Numeração: permite continuar a contagem quando um vídeo é sequência de outro.
   const [inicioParte, setInicioParte] = useState(1);
   const [totalManual, setTotalManual] = useState('');
+  // Trecho a fatiar. Vazio = vídeo inteiro; útil em vídeos longos do YouTube,
+  // onde normalmente só interessa um pedaço.
+  const [trechoIni, setTrechoIni] = useState('');
+  const [trechoFim, setTrechoFim] = useState('');
   // Título gravado no topo do vídeo (opcional): vira "{TÍTULO} — PARTE N" por parte.
   const [tituloVideo, setTituloVideo] = useState('');
   // Permite cancelar a geração de parte(s) em andamento (aborta o fetch, e o
@@ -86,7 +104,26 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
     localStorage.setItem('nw:segundos', String(segundos));
   }, [segundos]);
 
-  const totalPartesLocal = video ? Math.max(1, Math.ceil(video.duration / segundos)) : 0;
+  // Trecho efetivo (já limitado à duração real do vídeo). O servidor refaz essa
+  // mesma conta — aqui é só para a interface mostrar as partes certas.
+  const iniLido = lerTempo(trechoIni);
+  const fimLido = lerTempo(trechoFim);
+  const trechoInvalido = Boolean(
+    video &&
+      ((trechoIni.trim() && iniLido === null) ||
+        (trechoFim.trim() && fimLido === null) ||
+        (iniLido !== null && iniLido >= video.duration) ||
+        // Pega tanto "fim antes do início" quanto um fim zerado.
+        (fimLido !== null && fimLido <= (iniLido ?? 0))),
+  );
+  const ini = video ? Math.min(Math.max(iniLido ?? 0, 0), Math.max(0, video.duration - 1)) : 0;
+  const fim = video
+    ? Math.min(Math.max(fimLido ?? video.duration, ini + 1), video.duration)
+    : 0;
+  const trechoParcial = Boolean(video) && (ini > 0 || fim < (video?.duration ?? 0));
+
+  const totalPartesLocal =
+    video && !trechoInvalido ? Math.max(1, Math.ceil((fim - ini) / segundos)) : 0;
   const totalExibido =
     totalManual.trim() && parseInt(totalManual, 10) > 0
       ? parseInt(totalManual, 10)
@@ -109,7 +146,7 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
   async function buscar(url: string) {
     const alvo = url.trim();
     if (!alvo) {
-      setErro('Cole o link do TikTok primeiro.');
+      setErro('Cole o link do TikTok ou do YouTube primeiro.');
       return;
     }
     setCarregando(true);
@@ -126,6 +163,8 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
       setLinkBuscado(alvo);
       setInicioParte(1);
       setTotalManual('');
+      setTrechoIni('');
+      setTrechoFim('');
       // Dentro de um projeto: registra o vídeo na biblioteca local (só metadados).
       if (projetoId) {
         salvarVideo({
@@ -176,11 +215,18 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
       dur: String(segundos),
       pnum: String(numero),
       ptot: String(totalExibido),
+      ini: String(Math.round(ini)),
+      fim: String(Math.round(fim)),
       url: linkBuscado,
     });
-    // Com título, gera o PNG do overlay desta parte (título + número) no navegador.
+    // Com título, gera o PNG do overlay desta parte (título + número) no navegador,
+    // já na resolução do vídeo para o servidor não precisar redimensionar.
     const overlay = tituloVideo.trim()
-      ? await gerarOverlayTitulo(`${tituloVideo.trim()} — PARTE ${numero}`)
+      ? await gerarOverlayTitulo(
+          `${tituloVideo.trim()} — PARTE ${numero}`,
+          video?.largura,
+          video?.altura,
+        )
       : undefined;
     const { blob } = await executarParteSSE(
       params,
@@ -259,14 +305,14 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
       {!compacto && (
         <div className="hero">
           <h1>NovaWave</h1>
-          <p>Baixe vídeos do TikTok em HD, sem marca d&rsquo;água e com áudio.</p>
+          <p>Baixe vídeos do TikTok e do YouTube em HD, com áudio e já cortados em partes.</p>
         </div>
       )}
 
       <div className="busca">
         <input
           type="url"
-          placeholder="Cole aqui o link do TikTok..."
+          placeholder="Cole aqui o link do TikTok ou do YouTube..."
           value={link}
           onChange={(e) => setLink(e.target.value)}
           onKeyDown={(e) => {
@@ -310,7 +356,7 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
               </a>
               {video.temMusica && (
                 <a className="botao botao-secundario" href={urlDownload('musica')}>
-                  Só a música (MP3)
+                  Só o áudio ({video.extMusica === '.mp3' ? 'MP3' : 'M4A'})
                 </a>
               )}
             </div>
@@ -340,6 +386,60 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
               />
               <span className="valor-segundos">{segundos}s</span>
             </div>
+
+            <div className="numeracao">
+              <span className="numeracao-titulo">Trecho do vídeo:</span>
+              <label>
+                de
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="0:00"
+                  value={trechoIni}
+                  onChange={(e) => setTrechoIni(e.target.value)}
+                  disabled={ocupado}
+                />
+              </label>
+              <label>
+                até
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder={formatarDuracao(video.duration)}
+                  value={trechoFim}
+                  onChange={(e) => setTrechoFim(e.target.value)}
+                  disabled={ocupado}
+                />
+              </label>
+              {trechoParcial && !ocupado && (
+                <button
+                  className="botao botao-fantasma botao-trecho-tudo"
+                  onClick={() => {
+                    setTrechoIni('');
+                    setTrechoFim('');
+                  }}
+                >
+                  vídeo todo
+                </button>
+              )}
+            </div>
+            {trechoInvalido ? (
+              <span className="dica-numeracao dica-erro">
+                Trecho inválido. Use minutos e segundos (ex.: <strong>2:30</strong>) e deixe o
+                início antes do fim.
+              </span>
+            ) : (
+              trechoParcial && (
+                <span className="dica-numeracao">
+                  Só o trecho de{' '}
+                  <strong>
+                    {formatarDuracao(ini)} a {formatarDuracao(fim)}
+                  </strong>{' '}
+                  vai virar partes ({formatarDuracao(fim - ini)} de{' '}
+                  {formatarDuracao(video.duration)}).
+                </span>
+              )
+            )}
 
             <label className="campo-titulo">
               <span>Título no vídeo (opcional)</span>
@@ -399,16 +499,18 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
               </span>
             )}
 
-            <span className="partes">
-              {totalPartesLocal === 1
-                ? 'Com essa duração, o vídeo cabe em 1 parte única.'
-                : `Com ${segundos}s por parte, o vídeo vira ${totalPartesLocal} partes.`}
-            </span>
+            {totalPartesLocal > 0 && (
+              <span className="partes">
+                {totalPartesLocal === 1
+                  ? `Com essa duração, ${trechoParcial ? 'o trecho' : 'o vídeo'} cabe em 1 parte única.`
+                  : `Com ${segundos}s por parte, ${trechoParcial ? 'o trecho' : 'o vídeo'} vira ${totalPartesLocal} partes.`}
+              </span>
+            )}
 
             <div className="acoes lista-partes">
               {Array.from({ length: totalPartesLocal }, (_, i) => i + 1).map((n) => {
-                const ini = (n - 1) * segundos;
-                const fim = Math.min(n * segundos, video.duration);
+                const de = ini + (n - 1) * segundos;
+                const ate = Math.min(ini + n * segundos, fim);
                 const gerandoEsta = baixandoParte === n || (baixandoTodas && progresso?.parte === n);
                 return (
                   <button
@@ -425,7 +527,7 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
                       <>
                         Parte {numExibido(n)}
                         <small>
-                          {formatarDuracao(ini)}–{formatarDuracao(fim)}
+                          {formatarDuracao(de)}–{formatarDuracao(ate)}
                         </small>
                       </>
                     )}
@@ -464,7 +566,7 @@ export default function Downloader({ projetoId, compacto, onSalvar }: Downloader
 
       {!compacto && (
         <p className="rodape">
-          Sem marca d&rsquo;água • Com áudio • Grátis
+          TikTok sem marca d&rsquo;água • YouTube em HD • Com áudio • Grátis
           <br />
           Uso pessoal: respeite os direitos autorais dos criadores.
         </p>
